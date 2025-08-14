@@ -15,6 +15,6 @@ This repository hosts **documentation only** for the PowerPoint-based label PDF 
 
 ## Publish flow
 1) Edit here → Commit → (Optional) export to PDF
-2) Upload exported PDFs to **SharePoint** → `ServerPAD/Docs/10-Specs/…`
+2) Upload exported PDFs to **SharePoint** → `ServerPAD/Docs/Specs/…`
 
 Owner: <your name> • Last updated: 2025-08-14
