@@ -1,0 +1,24 @@
+@startuml
+actor User
+participant "Power Apps" as PA
+participant "Power Automate Cloud" as PAC
+participant "SharePoint (ServerPAD)" as SP
+participant "PAD Agent" as PAD
+participant "LabelGen.ps1" as LG
+participant "PowerPoint COM" as PPT
+participant "QRCoder.dll" as QR
+
+User -> PA: Submit form (sku/lang/count/template/fields)
+PA -> PAC: Trigger
+PAC -> SP: Create Job JSON (Jobs/incoming)
+PAD -> SP: Poll & move to processing
+PAD -> LG: Run LabelGen.ps1 -JobJsonPath
+LG -> LG: Generate serials (JOB8-SEQ)
+LG -> QR: Make QR PNG (per slide)
+LG -> PPT: Open template / duplicate slide
+LG -> PPT: Fill TXT_* and IMG_QR (+ images)
+LG -> PPT: Export PDF + thumbnail
+LG -> SP: Output/<job_id>/... + status.json
+PAD -> SP: Move job to done/failed
+PAC -> PA: Return status/url
+@enduml
