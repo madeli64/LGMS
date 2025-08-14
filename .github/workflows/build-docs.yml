@@ -11,27 +11,25 @@ jobs:
   build-docs:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false   # بقیه‌ی آیتم‌ها حتی اگر یکی fail شد، ادامه بدن
       matrix:
         include:
-          # Specs (EN/FR). skip if there isn't
+          # --- Specs (EN only) ---
           - md: docs/SPEC-1-LabelGen-EN.md
             base: SPEC-1-LabelGen-EN
             dest: Specs
-          - md: docs/SPEC-1-LabelGen-FR.md
-            base: SPEC-1-LabelGen-FR
-            dest: Specs
-          # Runbooks
+          # --- Runbooks ---
           - md: docs/runbooks/PAD-Agent.md
             base: Runbook-PAD-Agent
             dest: Runbooks
           - md: docs/runbooks/PAC-Flow.md
             base: Runbook-PAC-Flow
             dest: Runbooks
-          # Procedures (SOPs)
+          # --- Procedures (SOPs) ---
           - md: docs/sops/Template-Profiler.md
             base: SOP-Template-Profiler
             dest: Procedures
-          # Testing
+          # --- Testing ---
           - md: docs/testing/Test-Plan.md
             base: Test-Plan
             dest: Testing
@@ -39,19 +37,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Show repo tree (debug)
+        run: ls -R
+
       - name: Install Pandoc, LibreOffice, and fonts (incl. Persian/Arabic)
         run: |
           sudo apt-get update
-          sudo apt-get install -y pandoc libreoffice
-          # fonts for unicode + Arabic/Persian
+          sudo apt-get install -y pandoc libreoffice || (echo "Install failed" && exit 1)
+          # unicode fonts to avoid missing glyphs
           sudo apt-get install -y fonts-dejavu-core fonts-noto fonts-noto-core fonts-noto-extra || true
           sudo apt-get install -y fonts-noto-naskh-arabic fonts-noto-kufi-arabic || true
+          pandoc --version
+          soffice --version || true
 
       - name: Skip if markdown not present
         id: check
         run: |
           if [ ! -f "${{ matrix.md }}" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
+            echo "::warning::Markdown not found: ${{ matrix.md }} (skipping)"
           fi
 
       - name: Extract version from MD header (fallback 1.0.0)
@@ -59,58 +63,45 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         shell: bash
         run: |
+          set -e
           v=$(grep -m1 -Eo 'Version:\s*[0-9]+\.[0-9]+\.[0-9]+' "${{ matrix.md }}" | sed -E 's/.*:\s*//')
           if [ -z "$v" ]; then v=1.0.0; fi
           echo "v=$v" >> $GITHUB_OUTPUT
+          echo "Version = $v"
 
-      - name: Build DOCX with Pandoc
+      - name: Build DOCX with Pandoc (with TOC)
         if: steps.check.outputs.skip != 'true'
         run: |
+          set -e
           out="${{ matrix.base }}_v${{ steps.ver.outputs.v }}.docx"
-          pandoc "${{ matrix.md }}" -o "$out" --from gfm --toc
+          echo "Building DOCX from ${{ matrix.md }} -> $out"
+          pandoc "${{ matrix.md }}" -o "$out" --from gfm --toc --standalone
 
-      - name: Convert DOCX → PDF (LibreOffice headless)
+      - name: Convert DOCX → PDF (LibreOffice headless; retry with filter)
         if: steps.check.outputs.skip != 'true'
         run: |
-          soffice --headless --convert-to pdf "$(pwd)/${{ matrix.base }}_v${{ steps.ver.outputs.v }}.docx" --outdir "$(pwd)"
+          set +e
+          in="${{ matrix.base }}_v${{ steps.ver.outputs.v }}.docx"
+          echo "Converting to PDF (default)"
+          soffice --headless --convert-to pdf "$in" --outdir "$(pwd)"
+          rc=$?
+          if [ $rc -ne 0 ] || [ ! -f "${in%.docx}.pdf" ]; then
+            echo "::warning::Default conversion failed (rc=$rc). Retrying with writer_pdf_Export filter…"
+            soffice --headless --convert-to pdf:writer_pdf_Export "$in" --outdir "$(pwd)"
+            rc=$?
+          fi
+          if [ $rc -ne 0 ] || [ ! -f "${in%.docx}.pdf" ]; then
+            echo "::error::LibreOffice PDF conversion failed; DOCX will still be uploaded."
+            # don't fail the job here; allow artifact upload of DOCX
+            echo "pdf_failed=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Upload as artifact by destination
-        if: steps.check.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
+        if: steps.check.outputs.skip != 'true'
         with:
           name: ${{ matrix.dest }}   # Specs / Runbooks / Procedures / Testing
           path: |
             ${{ matrix.base }}_v${{ steps.ver.outputs.v }}.docx
             ${{ matrix.base }}_v${{ steps.ver.outputs.v }}.pdf
-
-  # (Optional) Render PlantUML diagrams to PNG/SVG → artifact "Diagrams"
-  diagrams:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Generate diagrams (if any)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y plantuml graphviz || true
-          mkdir -p out
-          if compgen -G "docs/diagrams/*.puml" > /dev/null; then
-            for f in docs/diagrams/*.puml; do
-              plantuml -tpng "$f" -o out
-              plantuml -tsvg "$f" -o out
-            done
-          else
-            echo "No .puml files found, skipping."
-          fi
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Diagrams
-          path: out
-          if-no-files-found: ignore
-      - name: Stamp version in filenames (optional)
-        run: |
-          V=$(grep -m1 -Eo 'Version:\s*[0-9]+\.[0-9]+\.[0-9]+' docs/SPEC-1-LabelGen-EN.md | sed -E 's/.*:\s*//')
-          [ -z "$V" ] && V=1.0.0
-          for f in out/*.{png,svg}; do
-            base=$(basename "$f")
-            mv "$f" "out/${base%.*}_v$V.${base##*.}"
-          done
+          if-no-files-found: warn
