@@ -13,12 +13,12 @@ jobs:
     strategy:
       matrix:
         include:
-          # Specs (EN/FA). هر کدوم اگر نبود، اتومات skip می‌شود.
+          # Specs (EN/FR). skip if there isn't
           - md: docs/SPEC-1-LabelGen-EN.md
             base: SPEC-1-LabelGen-EN
             dest: Specs
-          - md: docs/SPEC-1-LabelGen-FA.md
-            base: SPEC-1-LabelGen-FA
+          - md: docs/SPEC-1-LabelGen-FR.md
+            base: SPEC-1-LabelGen-FR
             dest: Specs
           # Runbooks
           - md: docs/runbooks/PAD-Agent.md
@@ -106,3 +106,11 @@ jobs:
           name: Diagrams
           path: out
           if-no-files-found: ignore
+      - name: Stamp version in filenames (optional)
+        run: |
+          V=$(grep -m1 -Eo 'Version:\s*[0-9]+\.[0-9]+\.[0-9]+' docs/SPEC-1-LabelGen-EN.md | sed -E 's/.*:\s*//')
+          [ -z "$V" ] && V=1.0.0
+          for f in out/*.{png,svg}; do
+            base=$(basename "$f")
+            mv "$f" "out/${base%.*}_v$V.${base##*.}"
+          done
