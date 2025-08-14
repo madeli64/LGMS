@@ -1,1 +1,16 @@
+# OS / editors
+.DS_Store
+Thumbs.db
+*.code-workspace
+.vscode/
 
+# Office exports
+*.pdf
+*.docx
+
+# Generated images/diagrams (exported)
+docs/diagrams/export/
+
+# Temp
+~$*
+*.tmp
