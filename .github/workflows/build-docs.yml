@@ -95,12 +95,12 @@ jobs:
             # don't fail the job here; allow artifact upload of DOCX
             echo "pdf_failed=true" >> $GITHUB_OUTPUT
           fi
-
+      
       - name: Upload as artifact by destination
         uses: actions/upload-artifact@v4
         if: steps.check.outputs.skip != 'true'
         with:
-          name: ${{ matrix.dest }}-${{ github.run_id }}   # Specs / Runbooks / Procedures / Testing
+          name: ${{ matrix.dest }}-${{ matrix.base }}-${{ github.run_id }}
           path: |
             ${{ matrix.base }}_v${{ steps.ver.outputs.v }}.docx
             ${{ matrix.base }}_v${{ steps.ver.outputs.v }}.pdf
