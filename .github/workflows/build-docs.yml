@@ -64,7 +64,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          v=$(grep -m1 -Eo 'Version:\s*[0-9]+\.[0-9]+\.[0-9]+' "${{ matrix.md }}" | sed -E 's/.*:\s*//')
+          v=$(grep -m1 -Eo 'Version:\s*[0-9]+\.[0-9]+\.[0-9]+' "${{ matrix.md }}" | sed -E 's/.*:\s*//' || true)
           if [ -z "$v" ]; then v=1.0.0; fi
           echo "v=$v" >> $GITHUB_OUTPUT
           echo "Version = $v"
